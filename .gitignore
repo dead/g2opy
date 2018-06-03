@@ -1,4 +1,5 @@
 build/
+g2opy.egg-info/
+dist/
 lib
 bin
-g2opy.egg-info/
