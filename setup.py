@@ -1,41 +1,72 @@
-from setuptools import setup
-from setuptools.command.install import install
-from distutils.sysconfig import get_python_lib
-import glob
-import shutil
+import os
+import re
+import sys
+import platform
+import subprocess
+
+from setuptools import setup, Extension
+from setuptools.command.build_ext import build_ext
+from distutils.version import LooseVersion
 
 
-__library_file__ = './lib/g2o*.so'
-__version__ = '0.0.1'
+class CMakeExtension(Extension):
+    def __init__(self, name, sourcedir=''):
+        Extension.__init__(self, name, sources=[])
+        self.sourcedir = os.path.abspath(sourcedir)
 
 
-
-class CopyLibFile(install):
-    """"
-    Directly copy library file to python's site-packages directory.
-    """
-
+class CMakeBuild(build_ext):
     def run(self):
-        install_dir = get_python_lib()
-        lib_file = glob.glob(__library_file__)
-        assert len(lib_file) == 1     
+        try:
+            out = subprocess.check_output(['cmake', '--version'])
+        except OSError:
+            raise RuntimeError("CMake must be installed to build the following extensions: " +
+                               ", ".join(e.name for e in self.extensions))
 
-        print('copying {} -> {}'.format(lib_file[0], install_dir))
-        shutil.copy(lib_file[0], install_dir)
+        if platform.system() == "Windows":
+            cmake_version = LooseVersion(re.search(r'version\s*([\d.]+)', out.decode()).group(1))
+            if cmake_version < '3.1.0':
+                raise RuntimeError("CMake >= 3.1.0 is required on Windows")
 
+        for ext in self.extensions:
+            self.build_extension(ext)
 
+    def build_extension(self, ext):
+        extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
+        cmake_args = ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + extdir,
+                      '-DPYTHON_EXECUTABLE=' + sys.executable]
+        
+        if os.getenv('CMAKE_TOOLCHAIN_FILE') is not None:
+            cmake_args.append(['-DCMAKE_TOOLCHAIN_FILE=' + os.getenv('CMAKE_TOOLCHAIN_FILE')])
+            print("USING TOOLCHAIN: %s" % (os.getenv('CMAKE_TOOLCHAIN_FILE')))
+        
+        cfg = 'Debug' if self.debug else 'Release'
+        build_args = ['--config', cfg]
 
+        if platform.system() == "Windows":
+            cmake_args += ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{}={}'.format(cfg.upper(), extdir)]
+            if sys.maxsize > 2**32:
+                cmake_args += ['-A', 'x64']
+            build_args += ['--', '/m']
+        else:
+            cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
+            build_args += ['--', '-j2']
+
+        env = os.environ.copy()
+        env['CXXFLAGS'] = '{} -DVERSION_INFO=\\"{}\\"'.format(env.get('CXXFLAGS', ''),
+                                                              self.distribution.get_version())
+        if not os.path.exists(self.build_temp):
+            os.makedirs(self.build_temp)
+        subprocess.check_call(['cmake', ext.sourcedir] + cmake_args, cwd=self.build_temp, env=env)
+        subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp)
 
 setup(
     name='g2opy',
-    version=__version__,
-    description='Python binding of C++ graph optimization framework g2o.',
-    url='https://github.com/uoip/g2opy',
-    license='BSD',
-    cmdclass=dict(
-        install=CopyLibFile
-    ),
-    keywords='g2o, SLAM, BA, ICP, optimization, python, binding',
+    version='0.0.2',
+    description='Python binding of C++ graph optimization framework g2o',
+	url='https://github.com/uoip/g2opy',
+	license='BSD',
+	keywords='g2o, SLAM, BA, ICP, optimization, python, binding',
     long_description="""This is a Python binding for c++ library g2o 
         (https://github.com/RainerKuemmerle/g2o).
 
@@ -43,5 +74,8 @@ setup(
         error functions. g2o has been designed to be easily extensible to a wide 
         range of problems and a new problem typically can be specified in a few 
         lines of code. The current implementation provides solutions to several 
-        variants of SLAM and BA."""
+        variants of SLAM and BA.""",
+    ext_modules=[CMakeExtension('g2opy')],
+    cmdclass=dict(build_ext=CMakeBuild),
+    zip_safe=False,
 )
