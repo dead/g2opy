@@ -1,3 +1,4 @@
-build*
+build/
 lib
 bin
+g2opy.egg-info/
