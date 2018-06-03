@@ -38,6 +38,7 @@
 
 // G2O
 #include <g2o/config.h>
+#include <g2o/core/base_vertex.h>
 #include <g2o/types/slam3d/vertex_se3.h>
 #include <g2o/types/slam3d/edge_se3.h>
 #include <g2o/core/estimate_propagator.h>

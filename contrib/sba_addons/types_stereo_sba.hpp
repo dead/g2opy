@@ -32,6 +32,7 @@
  */
 #pragma once
 
+#include <g2o/core/hyper_graph.h>
 #include <g2o/types/sba/types_sba.h>
 
 namespace g2o {
@@ -40,7 +41,7 @@ using namespace Eigen;
 
 // monocular projection for right camera
 // first two args are the measurement type, second two the connection classes
-class G2O_TYPES_SBA_API EdgeProjectP2MCRight : public  BaseBinaryEdge<2, Vector2d, VertexSBAPointXYZ, VertexCam>
+class EdgeProjectP2MCRight : public  BaseBinaryEdge<2, Vector2d, VertexSBAPointXYZ, VertexCam>
 {
   public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
