@@ -14,6 +14,8 @@ find_package(CSparse REQUIRED)
 find_package(BLAS)
 find_package(LAPACK)
 
+set(G2O_INSTALL_DIR ${CMAKE_BINARY_DIR}/g2oInstall/)
+
 OPTION(G2O_FAST_MATH "Enable fast math operations" OFF)
 
 ExternalProject_Add(
@@ -26,7 +28,7 @@ ExternalProject_Add(
 		--target install
 		--config Release
 	CMAKE_ARGS
-		-DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/g2oInstall
+		-DCMAKE_INSTALL_PREFIX=${G2O_INSTALL_DIR}
 		-DG2O_USE_CHOLMOD=ON
 		-DG2O_USE_CSPARSE=ON
 		-DG2O_USE_OPENGL=OFF
@@ -57,10 +59,8 @@ endif()
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/src)
 include_directories(${EIGEN3_INCLUDE_DIR})
-include_directories(${CMAKE_BINARY_DIR}/g2oInstall/include)
+include_directories(${G2O_INSTALL_DIR}/include)
 include_directories(${CHOLMOD_INCLUDE_DIR})
-
-link_directories(${CMAKE_BINARY_DIR}/g2oInstall/lib)
 
 add_subdirectory(pybind11)
 add_subdirectory(contrib)
@@ -69,14 +69,31 @@ add_dependencies(contrib g2o)
 
 pybind11_add_module(g2opy src/g2o.cpp)
 
-MACRO(G2O_LIBRARY MYLIBRARY MYLIBRARYNAME)
-	SET(${MYLIBRARY} "${CMAKE_SHARED_MODULE_PREFIX}g2o_${MYLIBRARYNAME}${CMAKE_SHARED_LIBRARY_SUFFIX}")
-	SET(${MYLIBRARY}_DEBUG "${CMAKE_SHARED_MODULE_PREFIX}g2o_${MYLIBRARYNAME}_d${CMAKE_SHARED_LIBRARY_SUFFIX}")
-ENDMACRO(G2O_LIBRARY LIBRARY LIBRARYNAME)
+set(G2O_RUNTIME_COPY "")
+
+macro(G2O_LIBRARY MYLIBRARY MYLIBRARYNAME)
+	add_library(__${MYLIBRARYNAME} STATIC IMPORTED GLOBAL)
+	add_dependencies(__${MYLIBRARYNAME} g2o)
+	
+	set_target_properties(__${MYLIBRARYNAME} PROPERTIES
+		IMPORTED_LOCATION_RELWITHDEBINFO ${G2O_INSTALL_DIR}/lib/g2o_${MYLIBRARYNAME}.lib
+		IMPORTED_LOCATION_RELEASE ${G2O_INSTALL_DIR}/lib/g2o_${MYLIBRARYNAME}.lib
+		IMPORTED_LOCATION_DEBUG ${G2O_INSTALL_DIR}}/lib/g2o_${MYLIBRARYNAME}_d.lib
+	)
+	
+	set(${MYLIBRARY} __${MYLIBRARYNAME})
+	
+	add_custom_target(${MYLIBRARY}_COPY
+		COMMAND ${CMAKE_COMMAND} -E copy ${G2O_INSTALL_DIR}/bin/g2o_${MYLIBRARYNAME}${CMAKE_SHARED_LIBRARY_SUFFIX} ${CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE}/
+		COMMENT "Moving files"
+		VERBATIM
+	)
+	
+	set(G2O_RUNTIME_COPY ${G2O_RUNTIME_COPY} ${MYLIBRARY}_COPY)
+endmacro(G2O_LIBRARY LIBRARY LIBRARYNAME)
 
 G2O_LIBRARY(G2O_STUFF_LIBRARY stuff)
 G2O_LIBRARY(G2O_CORE_LIBRARY core)
-G2O_LIBRARY(G2O_CLI_LIBRARY cli)
 G2O_LIBRARY(G2O_SOLVER_CHOLMOD solver_cholmod)
 G2O_LIBRARY(G2O_SOLVER_CSPARSE solver_csparse)
 G2O_LIBRARY(G2O_SOLVER_CSPARSE_EXTENSION csparse_extension)
@@ -118,4 +135,8 @@ target_link_libraries(g2opy PRIVATE
 	contrib
 )
 
-add_dependencies(g2opy g2o contrib)
+add_dependencies(g2opy
+	g2o
+	contrib
+	${G2O_RUNTIME_COPY}
+)
