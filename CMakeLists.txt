@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(g2opy)
 
-include(ExternalProject)
-
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -14,131 +12,98 @@ find_package(CSparse REQUIRED)
 find_package(BLAS)
 find_package(LAPACK)
 
-set(G2O_INSTALL_DIR ${CMAKE_BINARY_DIR}/g2oInstall/)
+add_subdirectory(pybind11)
 
-OPTION(G2O_FAST_MATH "Enable fast math operations" OFF)
+set(G2O_OPENGL_FOUND OFF)
+set(G2O_HAVE_CHOLMOD ${CHOLMOD_FOUND})
+set(G2O_HAVE_CSPARSE ${CSPARSE_FOUND})
+set(G2O_SHARED_LIBS  OFF)
+set(G2O_LGPL_SHARED_LIBS OFF)
+set(G2O_CXX_COMPILER "${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER}")
+configure_file(g2o/config.h.in "${PROJECT_BINARY_DIR}/g2o/g2o/config.h")
 
-ExternalProject_Add(
-	g2o
-	GIT_REPOSITORY "https://github.com/dead/g2o.git"
-	GIT_TAG "master"
-	INSTALL_COMMAND
-		cmake
-		--build .
-		--target install
-		--config Release
-	CMAKE_ARGS
-		-DCMAKE_INSTALL_PREFIX=${G2O_INSTALL_DIR}
-		-DG2O_USE_CHOLMOD=ON
-		-DG2O_USE_CSPARSE=ON
-		-DG2O_USE_OPENGL=OFF
-		-DG2O_BUILD_EXAMPLES=OFF
-		-DG2O_FAST_MATH=${G2O_FAST_MATH}
-		-DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
+file(GLOB G2O_CORE_FILES
+    "g2o/g2o/core/*.cpp"
 )
 
-if(MSVC)
-	MESSAGE(STATUS "Compiling with MSVC")
-	
-	SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Ox /Oi")
-	SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /Ox /Oi")
+list(FILTER G2O_CORE_FILES EXCLUDE REGEX ".*_test.cpp$")
 
-	SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
-	SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
-	
-	add_definitions("/EHsc") # exception handling
-	add_definitions("/Ob2")
-	add_definitions(-D_CRT_SECURE_NO_WARNINGS=1)  # Avoid deprecated fprintf(), etc
-	add_definitions("/nologo")
-	add_definitions("/wd4251") # disable warning on missing DLL interfaces
-	add_definitions("/wd4244") # Conversion from number_t -> int
-	add_definitions("/wd4267") # Conversion during return
-	add_definitions("/wd4522") # Duplicated operator=() in Eigen headers
+file(GLOB_RECURSE G2O_SOLVERS_FILES
+    "g2o/g2o/solvers/*.cpp"
+)
+
+file(GLOB_RECURSE G2O_STUFF_FILES
+	"g2o/g2o/stuff/*.cpp"
+	"g2o/g2o/stuff/*.c"
+)
+
+list(FILTER G2O_STUFF_FILES EXCLUDE REGEX ".*opengl_.*$")
+
+file(GLOB G2O_TYPES_FILES
+	"g2o/g2o/types/data/*.cpp"
+	"g2o/g2o/types/icp/*.cpp"
+	"g2o/g2o/types/sba/*.cpp"
+	"g2o/g2o/types/sclam2d/*.cpp"
+	"g2o/g2o/types/sim3/*.cpp"
+	"g2o/g2o/types/slam2d/*.cpp"
+	"g2o/g2o/types/slam2d_addons/*.cpp"
+	"g2o/g2o/types/slam3d/*.cpp"
+    "g2o/g2o/types/slam3d_addons/*.cpp"
+)
+
+list(FILTER G2O_TYPES_FILES EXCLUDE REGEX ".*/slam3d/dquat2mat_maxima_generated.cpp$")
+list(FILTER G2O_TYPES_FILES EXCLUDE REGEX ".*/slam3d/test_.*.cpp$")
+
+if(WIN32)
+  add_definitions(-DWINDOWS)
+  add_definitions(/bigobj /nologo /EHsc /GF /MP)
+  add_definitions(/wd4267 /wd4244 /wd4996)
+  
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
+
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Ox /Oi")
+  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /Ox /Oi")
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
+  set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
+
+  if(G2O_FAST_MATH)
+  	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /fp:fast")
+  endif()
 endif()
 
-include_directories(${PROJECT_SOURCE_DIR})
-include_directories(${PROJECT_SOURCE_DIR}/src)
-include_directories(${EIGEN3_INCLUDE_DIR})
-include_directories(${G2O_INSTALL_DIR}/include)
-include_directories(${CHOLMOD_INCLUDE_DIR})
+if(CMAKE_COMPILER_IS_GNUCXX)
+	option(BUILD_WITH_MARCH_NATIVE "Build with \"-march native\"" ON)
 
-add_subdirectory(pybind11)
-add_subdirectory(contrib)
+	if(BUILD_WITH_MARCH_NATIVE AND NOT "${CMAKE_SYSTEM_PROCESSOR}" MATCHES "arm" AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+		set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
+		set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
+	endif()
 
-add_dependencies(contrib g2o)
+	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
+	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
+	set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
+endif()
 
-pybind11_add_module(g2opy src/g2o.cpp)
+include_directories(${g2opy_SOURCE_DIR}/g2o
+					${PROJECT_BINARY_DIR}/g2o
+					${EIGEN3_INCLUDE_DIR}
+					${CHOLMOD_INCLUDE_DIR}
+					${BLAS_INCLUDE_DIR}
+					${LAPACK_INCLUDE_DIR})
 
-set(G2O_RUNTIME_COPY "")
+pybind11_add_module(g2opy src/g2o.cpp
+						  src/contrib/estimate_propagator/SmoothEstimatePropagator.cpp
+						  src/contrib/sba_addons/types_stereo_sba.cpp
+						  ${G2O_CORE_FILES}
+						  ${G2O_SOLVERS_FILES}
+						  ${G2O_STUFF_FILES}
+						  ${G2O_TYPES_FILES})
 
-macro(G2O_LIBRARY MYLIBRARY MYLIBRARYNAME)
-	add_library(__${MYLIBRARYNAME} STATIC IMPORTED GLOBAL)
-	add_dependencies(__${MYLIBRARYNAME} g2o)
-	
-	set_target_properties(__${MYLIBRARYNAME} PROPERTIES
-		IMPORTED_LOCATION_RELWITHDEBINFO ${G2O_INSTALL_DIR}/lib/g2o_${MYLIBRARYNAME}.lib
-		IMPORTED_LOCATION_RELEASE ${G2O_INSTALL_DIR}/lib/g2o_${MYLIBRARYNAME}.lib
-		IMPORTED_LOCATION_DEBUG ${G2O_INSTALL_DIR}}/lib/g2o_${MYLIBRARYNAME}_d.lib
-	)
-	
-	set(${MYLIBRARY} __${MYLIBRARYNAME})
-	
-	add_custom_target(${MYLIBRARY}_COPY
-		COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE}
-		COMMAND ${CMAKE_COMMAND} -E copy ${G2O_INSTALL_DIR}/bin/g2o_${MYLIBRARYNAME}${CMAKE_SHARED_LIBRARY_SUFFIX} ${CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE}/
-		COMMENT "Moving files"
-		VERBATIM
-	)
-	
-	add_dependencies(${MYLIBRARY}_COPY g2o)
-	set(G2O_RUNTIME_COPY ${G2O_RUNTIME_COPY} ${MYLIBRARY}_COPY)
-endmacro(G2O_LIBRARY LIBRARY LIBRARYNAME)
-
-G2O_LIBRARY(G2O_STUFF_LIBRARY stuff)
-G2O_LIBRARY(G2O_CORE_LIBRARY core)
-G2O_LIBRARY(G2O_SOLVER_CHOLMOD solver_cholmod)
-G2O_LIBRARY(G2O_SOLVER_CSPARSE solver_csparse)
-G2O_LIBRARY(G2O_SOLVER_CSPARSE_EXTENSION csparse_extension)
-G2O_LIBRARY(G2O_SOLVER_DENSE solver_dense)
-G2O_LIBRARY(G2O_SOLVER_PCG solver_pcg)
-G2O_LIBRARY(G2O_SOLVER_SLAM2D_LINEAR solver_slam2d_linear)
-G2O_LIBRARY(G2O_SOLVER_STRUCTURE_ONLY solver_structure_only)
-G2O_LIBRARY(G2O_SOLVER_EIGEN solver_eigen)
-G2O_LIBRARY(G2O_TYPES_DATA types_data)
-G2O_LIBRARY(G2O_TYPES_ICP types_icp)
-G2O_LIBRARY(G2O_TYPES_SBA types_sba)
-G2O_LIBRARY(G2O_TYPES_SCLAM2D types_sclam2d)
-G2O_LIBRARY(G2O_TYPES_SIM3 types_sim3)
-G2O_LIBRARY(G2O_TYPES_SLAM2D types_slam2d)
-G2O_LIBRARY(G2O_TYPES_SLAM3D types_slam3d)
 
 target_link_libraries(g2opy PRIVATE
 	${BLAS_LIBRARIES}
 	${LAPACK_LIBRARIES}
 	${CHOLMOD_LIBRARIES}
 	${CSPARSE_LIBRARY}
-	${G2O_CORE_LIBRARY}
-	${G2O_STUFF_LIBRARY}
-	${G2O_SOLVER_CHOLMOD}
-	${G2O_SOLVER_CSPARSE}
-	${G2O_SOLVER_CSPARSE_EXTENSION}
-	${G2O_SOLVER_DENSE}
-	${G2O_SOLVER_PCG}
-	${G2O_SOLVER_SLAM2D_LINEAR}
-	${G2O_SOLVER_STRUCTURE_ONLY}
-	${G2O_SOLVER_EIGEN}
-	${G2O_TYPES_DATA}
-	${G2O_TYPES_ICP}
-	${G2O_TYPES_SBA}
-	${G2O_TYPES_SCLAM2D}
-	${G2O_TYPES_SIM3}
-	${G2O_TYPES_SLAM2D}
-	${G2O_TYPES_SLAM3D}
-	contrib
-)
-
-add_dependencies(g2opy
-	g2o
-	contrib
-	${G2O_RUNTIME_COPY}
 )
