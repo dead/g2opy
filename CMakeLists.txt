@@ -56,10 +56,10 @@ list(FILTER G2O_TYPES_FILES EXCLUDE REGEX ".*/slam3d/test_.*.cpp$")
 
 if(WIN32)
   add_definitions(-DWINDOWS)
-  add_definitions(/bigobj /nologo /EHsc /GF /MP)
+  add_definitions(/bigobj /nologo /EHsc /GF)
   add_definitions(/wd4267 /wd4244 /wd4996)
   
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Ox /Oi")
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /Ox /Oi")
