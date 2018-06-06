@@ -37,7 +37,7 @@ class CMakeBuild(build_ext):
                       '-DPYTHON_EXECUTABLE=' + sys.executable]
         
         if os.getenv('CMAKE_TOOLCHAIN_FILE') is not None:
-            cmake_args.append(['-DCMAKE_TOOLCHAIN_FILE=' + os.getenv('CMAKE_TOOLCHAIN_FILE')])
+            cmake_args += ['-DCMAKE_TOOLCHAIN_FILE=' + os.getenv('CMAKE_TOOLCHAIN_FILE')]
             print("USING TOOLCHAIN: %s" % (os.getenv('CMAKE_TOOLCHAIN_FILE')))
         
         cfg = 'Debug' if self.debug else 'Release'
@@ -46,7 +46,7 @@ class CMakeBuild(build_ext):
         if platform.system() == "Windows":
             cmake_args += ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{}={}'.format(cfg.upper(), extdir)]
             if sys.maxsize > 2**32:
-                cmake_args += ['-A', 'x64']
+                cmake_args += ['-T', 'host=x64', '-A', 'x64']
             build_args += ['--', '/m']
         else:
             cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
