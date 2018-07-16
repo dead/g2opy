@@ -1,5 +1,7 @@
 # g2opy
 
+Windows: [![Build status](https://ci.appveyor.com/api/projects/status/sbndgs89mvxecmsh/branch/master?svg=true)](https://ci.appveyor.com/project/dead/g2opy/branch/master)
+
 This is a python binding of graph optimization C++ framework [g2o](https://github.com/RainerKuemmerle/g2o).
 
 > g2o is an open-source C++ framework for optimizing graph-based nonlinear error functions. g2o has been designed to be easily extensible to a wide range of problems and a new problem typically can be specified in a few lines of code. The current implementation provides solutions to several variants of SLAM and BA.  
@@ -18,16 +20,11 @@ In the contrib folder, I collected some useful 3rd-party C++ code related to g2o
 
 ## Installation
 ```
-git clone https://github.com/uoip/g2opy.git
+git clone https://github.com/dead/g2opy.git
 cd g2opy
-mkdir build
-cd build
-cmake ..
-make -j8
-cd ..
 python setup.py install
 ```
-Tested under Ubuntu 16.04, Python 3.6+.
+Tested under Windows 10, Python 3.6+.
 
 
 ## Get Started
@@ -130,7 +127,7 @@ class PoseGraphOptimization(g2o.SparseOptimizer):
     def get_pose(self, id):
         return self.vertex(id).estimate()
 ```
-For more details, checkout [python examples](python/examples) or project [stereo_ptam](https://github.com/uoip/stereo_ptam).  
+For more details, checkout [python examples](examples/). 
 Thanks to [pybind11](https://github.com/pybind/pybind11), g2opy works seamlessly between numpy and underlying Eigen.  
 
 
@@ -175,4 +172,4 @@ Hope this project can slightly relieve the situation.
 
 
 ## Contact
-If you have problems related to **binding code/python interface/python examples** of this project, you can report isseus, or email me (qihang@outlook.com).
+If you have problems related to **binding code/python interface/python examples** of this project, feel free to open an issue.
