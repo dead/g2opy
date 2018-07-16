@@ -56,10 +56,9 @@ list(FILTER G2O_TYPES_FILES EXCLUDE REGEX ".*/slam3d/test_.*.cpp$")
 
 if(WIN32)
   add_definitions(-DWINDOWS)
+  add_definitions(/MP)
   add_definitions(/bigobj /nologo /EHsc /GF)
   add_definitions(/wd4267 /wd4244 /wd4996)
-  
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Ox /Oi")
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /Ox /Oi")
@@ -85,25 +84,34 @@ if(CMAKE_COMPILER_IS_GNUCXX)
 	set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
 endif()
 
+add_library(g2o STATIC 	${G2O_CORE_FILES}
+					   	${G2O_SOLVERS_FILES}
+					   	${G2O_STUFF_FILES}
+						${G2O_TYPES_FILES})
+
+set_target_properties(g2o PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(g2o PROPERTIES LINK_FLAGS "/VERBOSE:LIB")
+
 include_directories(${g2opy_SOURCE_DIR}/g2o
+					${g2opy_SOURCE_DIR}/src
 					${PROJECT_BINARY_DIR}/g2o
 					${EIGEN3_INCLUDE_DIR}
 					${CHOLMOD_INCLUDE_DIR}
 					${BLAS_INCLUDE_DIR}
 					${LAPACK_INCLUDE_DIR})
 
-pybind11_add_module(g2opy src/g2o.cpp
-						  src/contrib/estimate_propagator/SmoothEstimatePropagator.cpp
-						  src/contrib/sba_addons/types_stereo_sba.cpp
-						  ${G2O_CORE_FILES}
-						  ${G2O_SOLVERS_FILES}
-						  ${G2O_STUFF_FILES}
-						  ${G2O_TYPES_FILES})
+file(GLOB_RECURSE G2OPY_FILES
+	"src/*.cpp"
+)
 
+pybind11_add_module(g2opy ${G2OPY_FILES})
 
 target_link_libraries(g2opy PRIVATE
+	g2o
 	${BLAS_LIBRARIES}
 	${LAPACK_LIBRARIES}
 	${CHOLMOD_LIBRARIES}
 	${CSPARSE_LIBRARY}
 )
+
+set_target_properties(g2opy PROPERTIES LINK_FLAGS "/VERBOSE:LIB")
